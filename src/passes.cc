@@ -76,6 +76,9 @@ int redo_main(std::string_view target, int argc, char **argv) {
   if constexpr (HAVE_TARGET_LOONGARCH32)
     if (target == LOONGARCH32::name)
       return mold_main<LOONGARCH32>(argc, argv);
+  if constexpr (HAVE_TARGET_ALPHA)
+    if (target == ALPHA::name)
+      return mold_main<ALPHA>(argc, argv);
   if constexpr (HAVE_TARGET_LOONGARCH64)
     if (target == LOONGARCH64::name)
       return mold_main<LOONGARCH64>(argc, argv);
@@ -211,6 +214,9 @@ void create_synthetic_sections(Context<E> &ctx) {
 
   if constexpr (is_ppc64v2<E>)
     ctx.extra.save_restore = push(new PPC64SaveRestoreSection);
+
+  if constexpr (is_alpha<E>)
+    ctx.extra.got = push(new AlphaGotSection);
 }
 
 template <typename E>
@@ -1978,6 +1984,9 @@ void scan_relocations(Context<E> &ctx) {
     sym->flags = 0;
   }
 
+  if constexpr (is_alpha<E>)
+    ctx.extra.got->finalize();
+
   if (ctx.has_textrel && ctx.arg.warn_textrel)
     Warn(ctx) << "creating a DT_TEXTREL in an output file";
 }
@@ -2683,6 +2692,8 @@ void sort_output_sections_regular(Context<E> &ctx) {
       return 2;
     if (chunk->name == ".toc")
       return 3;
+    if (chunk->name == ".alpha_got")
+      return 4;
     if (chunk == ctx.relro_padding)
       return INT64_MAX;
     return 0;

@@ -5,6 +5,7 @@
 [ $MACHINE = armeb ] && skip
 [[ $MACHINE = riscv* ]] && skip
 [[ $MACHINE = loongarch* ]] && skip
+[ $MACHINE = alpha ] && skip
 
 cat <<EOF | $CXX -c -o $t/a.o -ffunction-sections -fdata-sections -xc++ -
 #include <stdexcept>
