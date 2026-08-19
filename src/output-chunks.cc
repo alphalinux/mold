@@ -1387,16 +1387,27 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
   i64 nshards = (abs_rels.size() + DYNREL_SHARD_SIZE - 1) / DYNREL_SHARD_SIZE;
   dynrel_offsets.assign(nshards + 1, 0);
 
+  i64 num_ifunc = 0;
+
   for (i64 i = 0; i < (i64)abs_rels.size(); i++) {
     AbsRel<E> &r = abs_rels[i];
     r.kind = get_abs_rel_kind(ctx, *r.sym);
 
     bool emit = r.kind == ABS_REL_BASEREL || r.kind == ABS_REL_DYNREL;
-    if constexpr (supports_ifunc<E>)
-      emit |= (r.kind == ABS_REL_IFUNC);
+    if constexpr (supports_ifunc<E>) {
+      if (r.kind == ABS_REL_IFUNC) {
+        emit = true;
+        num_ifunc++;
+      }
+    }
     if (emit)
       dynrel_offsets[i / DYNREL_SHARD_SIZE + 1]++;
   }
+
+  // __rel_iplt_start and __rel_iplt_end bracket the R_*_IRELATIVE
+  // relocations at the end of .rel.dyn, so we need to know how many
+  // of them we are about to emit.
+  ctx.num_ifunc_dynrels += num_ifunc;
 
   for (i64 i = 0; i < nshards; i++)
     dynrel_offsets[i + 1] += dynrel_offsets[i];
