@@ -3162,6 +3162,13 @@ static i64 get_num_irelative_relocs(Context<E> &ctx) {
   for (Symbol<E> *sym : ctx.got->got_syms)
     if (sym->is_ifunc())
       n++;
+
+  // Alpha keeps its GOT entries in a section of its own.
+  if constexpr (is_alpha<E>)
+    for (AlphaGotSection::Group &group : ctx.extra.got->groups)
+      for (AlphaGotEntry &e : group.entries)
+        if (e.kind == ALPHA_GOT_REGULAR && e.sym->is_ifunc())
+          n++;
   return n;
 }
 

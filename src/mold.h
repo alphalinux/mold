@@ -3959,7 +3959,10 @@ inline bool Symbol<E>::is_local(Context<E> &ctx) const {
 template <typename E>
 inline bool Symbol<E>::is_pde_ifunc(Context<E> &ctx) const {
   // Returns true if this is an ifunc tha uses two GOT slots
-  return is_ifunc() && !ctx.arg.pic && !is_ppc64<E>;
+  //
+  // PPC64 and Alpha always call a function through the GOT, so they
+  // never need the extra slot holding a canonical address.
+  return is_ifunc() && !ctx.arg.pic && !is_ppc64<E> && !is_alpha<E>;
 }
 
 // A remaining weak undefined symbol is promoted to a dynamic symbol
