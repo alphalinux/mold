@@ -247,15 +247,26 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
   };
 
   // Alpha has neither a PLT nor copy relocations, so an imported symbol
-  // has no link-time address. A PC-relative or GP-relative relocation
-  // can't be promoted to a dynamic relocation either, so we have to
-  // report an error.
+  // or an ifunc has no link-time address. A PC-relative or GP-relative
+  // relocation can't be promoted to a dynamic relocation either, so we
+  // have to report an error.
   auto scan_alpha_pcrel = [&](Symbol<E> &sym, const ElfRel<E> &rel) {
     if (sym.is_imported)
       Error(ctx) << *this << ": " << rel << " against an imported symbol `"
                  << sym << "' is not supported";
+    else if (sym.is_ifunc())
+      Error(ctx) << *this << ": " << rel << " against an ifunc symbol `"
+                 << sym << "' is not supported";
     else
       scan_pcrel(ctx, sym, rel);
+  };
+
+  // R_ALPHA_IRELATIVE's addend is the resolver's address, so there's no
+  // way to add an offset to the resolved address.
+  auto check_ifunc_addend = [&](Symbol<E> &sym, const ElfRel<E> &rel) {
+    if (sym.is_ifunc() && rel.r_addend)
+      Error(ctx) << *this << ": " << rel << " against an ifunc symbol `"
+                 << sym << "' with a non-zero addend is not supported";
   };
 
   for (i64 i = 0; i < rels.size(); i++) {
@@ -265,11 +276,9 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
 
     Symbol<E> &sym = *file->symbols[rel.r_sym];
 
-    if (sym.is_ifunc())
-      Error(ctx) << sym << ": GNU ifunc symbol is not supported on Alpha";
-
     switch (rel.r_type) {
     case R_ALPHA_LITERAL:
+      check_ifunc_addend(sym, rel);
       add_got_entry({&sym, (i64)rel.r_addend, ALPHA_GOT_REGULAR});
       break;
     case R_ALPHA_SREL32:
@@ -279,13 +288,17 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
     case R_ALPHA_BRSGP:
       // A BRSGP call is a direct branch to a function that uses the same
       // GP as the caller. We have no PLT to indirect through, so we can't
-      // call an imported function that way. The callee must be marked
-      // either STO_ALPHA_STD_GPLOAD, meaning it begins with an `ldgp`
-      // prologue that we can skip, or STO_ALPHA_NOPV, meaning it doesn't
-      // use GP.
+      // call an imported function that way. An ifunc has no address until
+      // its resolver has run, so it can't be called directly either. The
+      // callee must be marked either STO_ALPHA_STD_GPLOAD, meaning it
+      // begins with an `ldgp` prologue that we can skip, or STO_ALPHA_NOPV,
+      // meaning it doesn't use GP.
       if (sym.is_imported)
         Error(ctx) << *this << ": " << sym << ": " << rel
                    << " against an imported symbol is not supported";
+      else if (sym.is_ifunc())
+        Error(ctx) << *this << ": " << sym << ": " << rel
+                   << " against an ifunc symbol is not supported";
       else if ((sym.esym().alpha_st_other & STO_ALPHA_STD_GPLOAD) !=
                  STO_ALPHA_NOPV &&
                (sym.esym().alpha_st_other & STO_ALPHA_STD_GPLOAD) !=
@@ -312,6 +325,8 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
       scan_alpha_pcrel(sym, rel);
       break;
     case R_ALPHA_REFQUAD:
+      check_ifunc_addend(sym, rel);
+      break;
     case R_ALPHA_LITUSE:
     case R_ALPHA_GPDISP:
     case R_ALPHA_HINT:
@@ -493,7 +508,12 @@ get_slots(Context<E> &ctx, const AlphaGotSection &sec) {
 
       switch (e.kind) {
       case ALPHA_GOT_REGULAR:
-        if (sym->is_imported) {
+        if (sym->is_ifunc()) {
+          // An ifunc has no address until its resolver has run, so the
+          // slot always has to be filled in at load-time. Alpha has no
+          // PLT, so this GOT entry is how the function is called.
+          add({off, sym->get_addr(ctx, NO_PLT) + e.addend, E::R_IRELATIVE});
+        } else if (sym->is_imported) {
           // R_ALPHA_GLOB_DAT ignores an addend, so we need to use
           // R_ALPHA_REFQUAD if we have a non-zero addend.
           if (e.addend)
@@ -545,7 +565,8 @@ i64 AlphaGotSection::get_num_dynrels(Context<E> &ctx) const {
     for (const Entry &e : group.entries) {
       switch (e.kind) {
       case ALPHA_GOT_REGULAR:
-        if (e.sym->is_imported || (ctx.arg.pic && e.sym->is_relative()))
+        if (e.sym->is_ifunc() || e.sym->is_imported ||
+            (ctx.arg.pic && e.sym->is_relative()))
           n++;
         break;
       case ALPHA_GOT_TLSGD:

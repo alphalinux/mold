@@ -1431,6 +1431,14 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
       // If we have a relocation against a read-only section, we need to
       // set the DT_TEXTREL flag for the loader.
       if (r.kind != ABS_REL_NONE && !(r.isec->shdr().sh_flags & SHF_WRITE)) {
+        // A statically-linked executable applies its IRELATIVE relocations
+        // before anything could make a read-only section writable.
+        if (is_alpha<E> && ctx.arg.static_ && r.kind == ABS_REL_IFUNC) {
+          Error(ctx) << *r.isec << ": ifunc symbol `" << sym
+                     << "' in read-only section is not supported";
+          continue;
+        }
+
         if (ctx.arg.z_text) {
           Error(ctx) << *r.isec << ": relocation at offset 0x"
                      << std::hex << r.offset << " against symbol `"

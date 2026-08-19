@@ -956,6 +956,7 @@ std::string rel_to_string<ALPHA>(u32 r_type) {
   CASE(R_ALPHA_TPRELHI);
   CASE(R_ALPHA_TPRELLO);
   CASE(R_ALPHA_TPREL16);
+  CASE(R_ALPHA_IRELATIVE);
   }
   return unknown_type(r_type);
 }

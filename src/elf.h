@@ -1298,6 +1298,7 @@ enum : u32 {
   R_ALPHA_TPRELHI = 39,
   R_ALPHA_TPRELLO = 40,
   R_ALPHA_TPREL16 = 41,
+  R_ALPHA_IRELATIVE = 42,
 };
 
 enum : u32 {
@@ -2294,6 +2295,7 @@ struct ALPHA {
   static constexpr u32 R_JUMP_SLOT = R_ALPHA_JMP_SLOT;
   static constexpr u32 R_ABS = R_ALPHA_REFQUAD;
   static constexpr u32 R_RELATIVE = R_ALPHA_RELATIVE;
+  static constexpr u32 R_IRELATIVE = R_ALPHA_IRELATIVE;
   static constexpr u32 R_DTPOFF = R_ALPHA_DTPREL64;
   static constexpr u32 R_TPOFF = R_ALPHA_TPREL64;
   static constexpr u32 R_DTPMOD = R_ALPHA_DTPMOD64;
