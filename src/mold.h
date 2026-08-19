@@ -1280,9 +1280,9 @@ public:
 
 private:
   // Even though u32 should suffice as an etnry size for all targets,
-  // s390x uses u64. It looks like a spec bug, but we need to follow
-  // suit for the sake of binary compatibility.
-  using Entry = std::conditional_t<is_s390x<E>, U64<E>, U32<E>>;
+  // s390x and Alpha use u64. It looks like a spec bug, but we need to
+  // follow suit for the sake of binary compatibility.
+  using Entry = std::conditional_t<is_s390x<E> || is_alpha<E>, U64<E>, U32<E>>;
 };
 
 // .gnu.hash is an alternative format for .hash. It contains not only an
