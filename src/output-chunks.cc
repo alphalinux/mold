@@ -1401,6 +1401,7 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
   tbb::parallel_for((i64)0, nshards, [&](i64 idx) {
     i64 begin = idx * DYNREL_SHARD_SIZE;
     i64 end = std::min<i64>(begin + DYNREL_SHARD_SIZE, abs_rels.size());
+    i64 num_ifunc = 0;
 
     for (AbsRel<E> &r : std::span(abs_rels).subspan(begin, end - begin)) {
       Symbol<E> &sym = *r.sym;
@@ -1410,8 +1411,12 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
       r.kind = get_abs_rel_kind(ctx, sym);
 
       bool emit = r.kind == ABS_REL_BASEREL || r.kind == ABS_REL_DYNREL;
-      if constexpr (supports_ifunc<E>)
-        emit |= (r.kind == ABS_REL_IFUNC);
+      if constexpr (supports_ifunc<E>) {
+        if (r.kind == ABS_REL_IFUNC) {
+          emit = true;
+          num_ifunc++;
+        }
+      }
       if (emit)
         dynrel_offsets[idx + 1]++;
 
@@ -1429,6 +1434,12 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
         ctx.has_textrel = true;
       }
     }
+
+    // __rel_iplt_start and __rel_iplt_end bracket the R_*_IRELATIVE
+    // relocations at the end of .rel.dyn, so we need to know how many
+    // of them we are about to emit.
+    if (num_ifunc)
+      ctx.num_ifunc_dynrels += num_ifunc;
   });
 
   for (i64 i = 0; i < nshards; i++)
