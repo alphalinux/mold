@@ -104,6 +104,10 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
     u64 P = get_addr() + rel.r_offset;
     u64 GP = ctx.extra.got->get_gp(ctx, *file);
 
+    auto check = [&](i64 val, i64 lo, i64 hi) {
+      check_range(ctx, i, val, lo, hi);
+    };
+
     switch (rel.r_type) {
     case R_ALPHA_GPREL32:
       *(ul32 *)loc = S + A - GP;
@@ -112,9 +116,27 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       *(ul16 *)loc =
         ctx.extra.got->get_addr(*file, {&sym, (i64)A, ALPHA_GOT_REGULAR}) - GP;
       break;
-    case R_ALPHA_BRSGP:
-      *(ul32 *)loc |= bits(S + A - P - 4, 22, 0);
+    case R_ALPHA_BRSGP: {
+      // A direct branch doesn't set $27 to the callee's address, so we
+      // have to skip the callee's `ldgp` prologue, which would compute a
+      // bogus GP from it.
+      i64 val = S + A - P - 4;
+      if ((sym.esym().alpha_st_other & STO_ALPHA_STD_GPLOAD) ==
+          STO_ALPHA_STD_GPLOAD)
+        val += 8;
+
+      // The caller resumes with the GP it had before the call, so the
+      // callee must be assigned the same GP as we are.
+      if (sym.file && !sym.file->is_dso &&
+          GP != ctx.extra.got->get_gp(ctx, *(ObjectFile<E> *)&*sym.file))
+        Error(ctx) << *this << ": " << sym << ": BRSGP call between input"
+                   << " files that are assigned different GP values";
+
+      // The displacement is a 21-bit signed word offset.
+      check(val, -(1 << 22), 1 << 22);
+      *(ul32 *)loc |= bits(val, 22, 2);
       break;
+    }
     case R_ALPHA_GPDISP:
       *(ul16 *)loc = hi(GP - P);
       *(ul16 *)(loc + A) = GP - P;
@@ -244,8 +266,21 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
       scan_alpha_pcrel(sym, rel);
       break;
     case R_ALPHA_BRSGP:
+      // A BRSGP call is a direct branch to a function that uses the same
+      // GP as the caller. We have no PLT to indirect through, so we can't
+      // call an imported function that way. The callee must be marked
+      // either STO_ALPHA_STD_GPLOAD, meaning it begins with an `ldgp`
+      // prologue that we can skip, or STO_ALPHA_NOPV, meaning it doesn't
+      // use GP.
       if (sym.is_imported)
-        sym.flags |= NEEDS_PLT;
+        Error(ctx) << *this << ": " << sym << ": " << rel
+                   << " against an imported symbol is not supported";
+      else if ((sym.esym().alpha_st_other & STO_ALPHA_STD_GPLOAD) !=
+                 STO_ALPHA_NOPV &&
+               (sym.esym().alpha_st_other & STO_ALPHA_STD_GPLOAD) !=
+                 STO_ALPHA_STD_GPLOAD)
+        Error(ctx) << *this << ": " << sym << ": " << rel
+                   << " against a symbol without .prologue";
       break;
     case R_ALPHA_TLSGD:
       add_got_entry({&sym, (i64)rel.r_addend, ALPHA_GOT_TLSGD});
