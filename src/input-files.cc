@@ -1319,6 +1319,13 @@ void ObjectFile<E>::scan_relocations(Context<E> &ctx) {
           Fatal(ctx) << *this << ": " << sym
                      << ": .eh_frame CIE record with an external data reference"
                      << " is not supported";
+        // Alpha has no PLT, so there's no link-time address we can give
+        // to an imported function.
+        if constexpr (is_alpha<E>)
+          Fatal(ctx) << *this << ": " << sym << ": .eh_frame CIE record with"
+                     << " a reference to an imported function is not"
+                     << " supported on this target";
+
         sym.flags |= NEEDS_PLT;
       }
     }

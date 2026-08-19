@@ -1368,10 +1368,16 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
 
   // We can sometimes avoid creating dynamic relocations in read-only
   // sections by promoting symbols to canonical PLT or copy relocations.
+  //
+  // Alpha doesn't have PLT because all function calls are made indirectly
+  // through GOT, so we can't create a canonical PLT for a function symbol.
+  // For such target, we leave the relocation as a dynamic relocation,
+  // which makes the output file have a text relocation.
   if (!ctx.arg.pic && !(this->shdr.sh_flags & SHF_WRITE))
     for (AbsRel<E> &r : abs_rels)
       if (Symbol<E> &sym = *r.sym;
-          sym.is_imported && !sym.is_absolute())
+          sym.is_imported && !sym.is_absolute() &&
+          (!is_alpha<E> || sym.get_type() != STT_FUNC))
         sym.flags |= NEEDS_CANONICAL;
 
   // Classify relocations and retain exact per-shard output counts.

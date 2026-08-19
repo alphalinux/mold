@@ -199,6 +199,17 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
   assert(shdr().sh_flags & SHF_ALLOC);
   std::span<const ElfRel<E>> rels = get_rels(ctx);
 
+  // Alpha has no PLT, so there's no link-time address we can give to an
+  // imported function. A PC-relative relocation can't be promoted to a
+  // dynamic relocation either, so we have to report an error.
+  auto scan_alpha_pcrel = [&](Symbol<E> &sym, const ElfRel<E> &rel) {
+    if (sym.is_imported && sym.get_type() == STT_FUNC)
+      Error(ctx) << *this << ": " << rel << " against an imported function `"
+                 << sym << "' is not supported";
+    else
+      scan_pcrel(ctx, sym, rel);
+  };
+
   for (i64 i = 0; i < rels.size(); i++) {
     const ElfRel<E> &rel = rels[i];
     if (rel.r_type == R_NONE || record_undef_error(ctx, rel))
@@ -217,7 +228,7 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
         sym.flags |= NEEDS_GOT;
       break;
     case R_ALPHA_SREL32:
-      scan_pcrel(ctx, sym, rel);
+      scan_alpha_pcrel(sym, rel);
       break;
     case R_ALPHA_BRSGP:
       if (sym.is_imported)
