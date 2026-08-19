@@ -1977,6 +1977,44 @@ struct ObjectFileExtras<PPC32> {
   ArenaPtr<InputSection<PPC32>> got2;
 };
 
+// On Alpha, a GOT entry is always accessed as a 16-bit signed
+// displacement from GP, so a single GP value can address only 64 KiB
+// worth of GOT entries. To link a program that needs more GOT entries
+// than that, we split the GOT into multiple 64 KiB "groups" and assign
+// a different GP value to each input file. See AlphaGotSection for
+// details.
+enum AlphaGotKind : u8 {
+  ALPHA_GOT_REGULAR,
+  ALPHA_GOT_TLSGD,
+  ALPHA_GOT_GOTTP,
+  ALPHA_GOT_TLSLD,
+};
+
+struct AlphaGotEntry {
+  bool operator==(const AlphaGotEntry &) const = default;
+
+  // Number of words this entry occupies in the GOT.
+  i64 size() const {
+    return (kind == ALPHA_GOT_TLSGD || kind == ALPHA_GOT_TLSLD) ? 2 : 1;
+  }
+
+  Symbol<ALPHA> *sym;
+  i64 addend;
+  AlphaGotKind kind;
+};
+
+bool operator<(const AlphaGotEntry &a, const AlphaGotEntry &b);
+
+template <>
+struct ObjectFileExtras<ALPHA> {
+  // GOT entries referred to by this file. Filled by scan_relocations()
+  // and consumed by AlphaGotSection::finalize().
+  std::vector<AlphaGotEntry> got_entries;
+
+  // Index into AlphaGotSection::groups.
+  i64 got_group = 0;
+};
+
 template <typename E>
 ExactArray<ElfRel<E>> decode_crel(Context<E> &ctx, ObjectFile<E> &file,
                                   const ElfShdr<E> &shdr);
@@ -2504,22 +2542,31 @@ public:
     this->shdr.sh_addralign = 8;
   }
 
-  void add_symbol(Symbol<ALPHA> &sym, i64 addend);
-  void finalize();
-  u64 get_addr(Symbol<ALPHA> &sym, i64 addend);
+  using Entry = AlphaGotEntry;
+
+  // A group is a set of GOT entries that are addressable from a single
+  // GP value. Each group is at most 64 KiB in size.
+  struct Group {
+    std::vector<Entry> entries;
+    std::vector<i64> offsets; // byte offset of each entry from .alpha_got
+    i64 offset = 0;           // byte offset of this group from .alpha_got
+    i64 size = 0;
+  };
+
+  static constexpr i64 GROUP_SIZE = 65536;
+
+  void finalize(Context<ALPHA> &ctx);
+  u64 get_gp(Context<ALPHA> &ctx, ObjectFile<ALPHA> &file) const;
+  u64 get_addr(ObjectFile<ALPHA> &file, Entry ent) const;
   i64 get_num_dynrels(Context<ALPHA> &ctx) const override;
   void write_dynrels(Context<ALPHA> &ctx, ElfRel<ALPHA> *buf) const override;
   void copy_buf(Context<ALPHA> &ctx) override;
 
-  struct Entry {
-    bool operator==(const Entry &) const = default;
-    Symbol<ALPHA> *sym;
-    i64 addend;
-  };
+  std::vector<Group> groups;
 
-private:
-  std::vector<Entry> entries;
-  std::mutex mu;
+  // True if we have at least one GOT entry for the initial-exec TLS
+  // model. Used to set the DF_STATIC_TLS flag.
+  bool has_gottp = false;
 };
 
 //

@@ -3,6 +3,11 @@
 
 [ $MACHINE = sh4 ] && skip
 
+# On Alpha, all 50,000 function addresses are read from GOT relative to
+# GP, but a single GP value can address only 64 KiB worth of GOT entries.
+# GNU ld can't link this program either.
+[ $MACHINE = alpha ] && skip
+
 # Regression test for https://github.com/rui314/mold/issues/1538.
 #
 # On targets that use range extension thunks (ARM and PPC), mold's first
