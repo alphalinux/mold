@@ -1389,7 +1389,12 @@ void OutputSection<E>::scan_abs_relocations(Context<E> &ctx) {
 
   // We can sometimes avoid creating dynamic relocations in read-only
   // sections by promoting symbols to canonical PLT or copy relocations.
-  bool promote = !ctx.arg.pic && !(this->shdr.sh_flags & SHF_WRITE);
+  //
+  // Alpha has no PLT, and glibc doesn't support R_ALPHA_COPY, so we leave
+  // the relocation as a dynamic relocation, which makes the output file
+  // have a text relocation.
+  bool promote =
+    !is_alpha<E> && !ctx.arg.pic && !(this->shdr.sh_flags & SHF_WRITE);
 
   // Classify relocations and retain exact per-shard output counts. A
   // single output section such as .data.rel.ro can account for most of
