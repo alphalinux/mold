@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 . $(dirname $0)/common.inc
 
+[ $MACHINE = alpha ] && skip
 [ $MACHINE = sh4 ] && skip
 
 seq 1    1000  | sed 's/.*/void func&() {}/' > $t/a0.c

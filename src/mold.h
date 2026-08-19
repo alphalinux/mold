@@ -2583,6 +2583,38 @@ template <> u64 get_eflags(Context<PPC64V2> &ctx);
 i64 sparc_plt_ptr_offset(Context<SPARC64> &ctx, i64 pltidx);
 
 //
+// arch-alpha.cc
+//
+
+class AlphaGotSection : public Chunk<ALPHA> {
+public:
+  AlphaGotSection() {
+    this->name = ".alpha_got";
+    this->is_relro = true;
+    this->shdr.sh_type = SHT_PROGBITS;
+    this->shdr.sh_flags = SHF_ALLOC | SHF_WRITE;
+    this->shdr.sh_addralign = 8;
+  }
+
+  void add_symbol(Symbol<ALPHA> &sym, i64 addend);
+  void finalize();
+  u64 get_addr(Symbol<ALPHA> &sym, i64 addend);
+  i64 get_num_dynrels(Context<ALPHA> &ctx) const override;
+  void write_dynrels(Context<ALPHA> &ctx, ElfRel<ALPHA> *buf) const override;
+  void copy_buf(Context<ALPHA> &ctx) override;
+
+  struct Entry {
+    bool operator==(const Entry &) const = default;
+    Symbol<ALPHA> *sym;
+    i64 addend;
+  };
+
+private:
+  std::vector<Entry> entries;
+  std::mutex mu;
+};
+
+//
 // main.cc
 //
 
@@ -2692,6 +2724,11 @@ struct ContextExtras<PPC64V2> {
 template <>
 struct ContextExtras<SPARC64> {
   Symbol<SPARC64> *tls_get_addr = nullptr;
+};
+
+template <>
+struct ContextExtras<ALPHA> {
+  AlphaGotSection *got = nullptr;
 };
 
 // Context represents a context object for each invocation of the linker.

@@ -2125,6 +2125,9 @@ to_output_esym(Context<E> &ctx, Symbol<E> &sym, u32 st_name, U32<E> *shn_xindex)
   if constexpr (is_ppc64v2<E>)
     esym.ppc64_local_entry = sym.esym().ppc64_local_entry;
 
+  if constexpr (is_alpha<E>)
+    esym.alpha_st_other = sym.esym().alpha_st_other;
+
   auto get_st_shndx = [&](Symbol<E> &sym) -> u32 {
     if (SectionFragment<E> *frag = sym.get_frag())
       if (frag->is_alive)
@@ -3546,6 +3549,13 @@ void RelocSection<E>::copy_buf(Context<E> &ctx) {
       i64 symidx;
       i64 addend;
       std::tie(symidx, addend) = get_symidx_addend(ctx, isec, rel);
+
+      // On Alpha, the r_addend field of R_ALPHA_GPDISP and R_ALPHA_LITUSE
+      // does not contain an addend but auxiliary information for the
+      // relocation, so it must be copied verbatim.
+      if constexpr (is_alpha<E>)
+        if (rel.r_type == R_ALPHA_GPDISP || rel.r_type == R_ALPHA_LITUSE)
+          addend = rel.r_addend;
 
       i64 r_offset = isec.output_section->shdr.sh_addr + isec.offset + rel.r_offset;
 

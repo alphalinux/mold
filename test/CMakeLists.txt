@@ -31,7 +31,7 @@ endif()
 if(MOLD_ENABLE_QEMU_TESTS)
   list(APPEND QEMU_ARCHS
     x86_64 i386 arm armeb aarch64 aarch64_be ppc ppc64 ppc64le sparc64
-    sh4 sh4eb s390x riscv64 riscv32 m68k loongarch64)
+    sh4 sh4eb s390x riscv64 riscv32 m68k loongarch64 alpha)
 
   LIST(APPEND TRIPLES
     x86_64-linux-gnu
@@ -48,6 +48,7 @@ if(MOLD_ENABLE_QEMU_TESTS)
     s390x-linux-gnu
     sh4-linux-gnu
     sh4aeb-linux-gnu
+    alpha-linux-gnu
     riscv32-linux-gnu
     m68k-linux-gnu
     loongarch64-linux-gnu)
@@ -180,6 +181,10 @@ endif()
 
 if(${MACHINE} STREQUAL "sh4aeb" OR (HAS_qemu-sh4eb AND HAS_sh4aeb-linux-gnu-gcc))
   add_target(sh4aeb sh4aeb-linux-gnu)
+endif()
+
+if(${MACHINE} STREQUAL "alpha" OR (HAS_qemu-alpha AND HAS_alpha-linux-gnu-gcc))
+  add_target(alpha alpha-linux-gnu)
 endif()
 
 if(${MACHINE} STREQUAL "m68k" OR (HAS_qemu-m68k AND HAS_m68k-linux-gnu-gcc))

@@ -27,6 +27,7 @@ struct SPARC64;
 struct M68K;
 struct SH4LE;
 struct SH4BE;
+struct ALPHA;
 struct LOONGARCH64;
 struct LOONGARCH32;
 
@@ -240,6 +241,7 @@ enum : u32 {
   EM_AARCH64 = 183,
   EM_RISCV = 243,
   EM_LOONGARCH = 258,
+  EM_ALPHA = 0x9026,
 };
 
 enum : u32 {
@@ -402,6 +404,8 @@ enum : u32 {
 
 enum : u32 {
   STO_RISCV_VARIANT_CC = 0x80,
+  STO_ALPHA_NOPV = 0x20,
+  STO_ALPHA_STD_GPLOAD = 0x22,
 };
 
 enum : u32 {
@@ -1261,6 +1265,42 @@ enum : u32 {
 };
 
 enum : u32 {
+  R_ALPHA_NONE = 0,
+  R_ALPHA_REFLONG = 1,
+  R_ALPHA_REFQUAD = 2,
+  R_ALPHA_GPREL32 = 3,
+  R_ALPHA_LITERAL = 4,
+  R_ALPHA_LITUSE = 5,
+  R_ALPHA_GPDISP = 6,
+  R_ALPHA_BRADDR = 7,
+  R_ALPHA_HINT = 8,
+  R_ALPHA_SREL16 = 9,
+  R_ALPHA_SREL32 = 10,
+  R_ALPHA_SREL64 = 11,
+  R_ALPHA_GPRELHIGH = 17,
+  R_ALPHA_GPRELLOW = 18,
+  R_ALPHA_GPREL16 = 19,
+  R_ALPHA_COPY = 24,
+  R_ALPHA_GLOB_DAT = 25,
+  R_ALPHA_JMP_SLOT = 26,
+  R_ALPHA_RELATIVE = 27,
+  R_ALPHA_BRSGP = 28,
+  R_ALPHA_TLSGD = 29,
+  R_ALPHA_TLSLDM = 30,
+  R_ALPHA_DTPMOD64 = 31,
+  R_ALPHA_GOTDTPREL = 32,
+  R_ALPHA_DTPREL64 = 33,
+  R_ALPHA_DTPRELHI = 34,
+  R_ALPHA_DTPRELLO = 35,
+  R_ALPHA_DTPREL16 = 36,
+  R_ALPHA_GOTTPREL = 37,
+  R_ALPHA_TPREL64 = 38,
+  R_ALPHA_TPRELHI = 39,
+  R_ALPHA_TPRELLO = 40,
+  R_ALPHA_TPREL16 = 41,
+};
+
+enum : u32 {
   R_LARCH_NONE = 0,
   R_LARCH_32 = 1,
   R_LARCH_64 = 2,
@@ -1584,6 +1624,10 @@ struct ElfSym<E> {
       u8 : 5;
       u8 ppc64_local_entry : 3;
     };
+    struct {
+      u8 : 2;
+      u8 alpha_st_other : 6;
+    };
   };
 #else
   u8 st_bind : 4;
@@ -1596,6 +1640,7 @@ struct ElfSym<E> {
     u8 arm64_variant_pcs : 1;
     u8 riscv_variant_cc : 1;
     u8 ppc64_local_entry : 3;
+    u8 alpha_st_other : 6;
   };
 #endif
 
@@ -1863,6 +1908,7 @@ template <typename E> concept is_sparc64 = std::same_as<E, SPARC64>;
 template <typename E> concept is_m68k = std::same_as<E, M68K>;
 template <typename E> concept is_sh4le = std::same_as<E, SH4LE>;
 template <typename E> concept is_sh4be = std::same_as<E, SH4BE>;
+template <typename E> concept is_alpha = std::same_as<E, ALPHA>;
 template <typename E> concept is_loongarch64 = std::same_as<E, LOONGARCH64>;
 template <typename E> concept is_loongarch32 = std::same_as<E, LOONGARCH32>;
 
@@ -2229,6 +2275,29 @@ struct SH4BE : SH4LE {
   static constexpr std::string_view name = "sh4be";
   static constexpr bool is_le = false;
   static constexpr u8 trap[] = { 0xff, 0xfd }; // illegal
+};
+
+struct ALPHA {
+  static constexpr std::string_view name = "alpha";
+  static constexpr bool is_64 = true;
+  static constexpr bool is_le = true;
+  static constexpr bool is_rela = true;
+  static constexpr u32 page_size = 65536;
+  static constexpr u32 e_machine = EM_ALPHA;
+  static constexpr u32 plt_hdr_size = 0;
+  static constexpr u32 plt_size = 0;
+  static constexpr u32 pltgot_size = 0;
+  static constexpr u8 trap[] = { 0x81, 0x00, 0x00, 0x00 }; // bugchk
+
+  static constexpr u32 R_COPY = R_ALPHA_COPY;
+  static constexpr u32 R_GLOB_DAT = R_ALPHA_GLOB_DAT;
+  static constexpr u32 R_JUMP_SLOT = R_ALPHA_JMP_SLOT;
+  static constexpr u32 R_ABS = R_ALPHA_REFQUAD;
+  static constexpr u32 R_RELATIVE = R_ALPHA_RELATIVE;
+  static constexpr u32 R_DTPOFF = R_ALPHA_DTPREL64;
+  static constexpr u32 R_TPOFF = R_ALPHA_TPREL64;
+  static constexpr u32 R_DTPMOD = R_ALPHA_DTPMOD64;
+  static constexpr u32 R_FUNCALL[] = {};
 };
 
 struct LOONGARCH64 {
