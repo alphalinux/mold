@@ -156,7 +156,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     case R_ALPHA_TLSGD:
       *(ul16 *)loc =
-        ctx.extra.got->get_addr(*file, {&sym, 0, ALPHA_GOT_TLSGD}) - GP;
+        ctx.extra.got->get_addr(*file, {&sym, (i64)A, ALPHA_GOT_TLSGD}) - GP;
       break;
     case R_ALPHA_TLSLDM:
       *(ul16 *)loc =
@@ -170,7 +170,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     case R_ALPHA_GOTTPREL:
       *(ul16 *)loc =
-        ctx.extra.got->get_addr(*file, {&sym, 0, ALPHA_GOT_GOTTP}) + A - GP;
+        ctx.extra.got->get_addr(*file, {&sym, (i64)A, ALPHA_GOT_GOTTP}) - GP;
       break;
     case R_ALPHA_TPRELHI:
       *(ul16 *)loc = hi(S + A - ctx.tp_addr);
@@ -289,13 +289,13 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
                    << " against a symbol without .prologue";
       break;
     case R_ALPHA_TLSGD:
-      add_got_entry({&sym, 0, ALPHA_GOT_TLSGD});
+      add_got_entry({&sym, (i64)rel.r_addend, ALPHA_GOT_TLSGD});
       break;
     case R_ALPHA_TLSLDM:
       add_got_entry({nullptr, 0, ALPHA_GOT_TLSLD});
       break;
     case R_ALPHA_GOTTPREL:
-      add_got_entry({&sym, 0, ALPHA_GOT_GOTTP});
+      add_got_entry({&sym, (i64)rel.r_addend, ALPHA_GOT_GOTTP});
       break;
     case R_ALPHA_TPRELHI:
     case R_ALPHA_TPRELLO:
@@ -509,22 +509,22 @@ get_slots(Context<E> &ctx, const AlphaGotSection &sec) {
       case ALPHA_GOT_TLSGD:
         if (sym->is_imported) {
           add({off, 0, E::R_DTPMOD, sym});
-          add({off + wordsize, 0, E::R_DTPOFF, sym});
+          add({off + wordsize, (u64)e.addend, E::R_DTPOFF, sym});
         } else if (ctx.arg.shared) {
           add({off, 0, E::R_DTPMOD});
-          add({off + wordsize, sym->get_addr(ctx) - ctx.dtp_addr});
+          add({off + wordsize, sym->get_addr(ctx) + e.addend - ctx.dtp_addr});
         } else {
           add({off, 1}); // 1 means the main executable
-          add({off + wordsize, sym->get_addr(ctx) - ctx.dtp_addr});
+          add({off + wordsize, sym->get_addr(ctx) + e.addend - ctx.dtp_addr});
         }
         break;
       case ALPHA_GOT_GOTTP:
         if (sym->is_imported)
-          add({off, 0, E::R_TPOFF, sym});
+          add({off, (u64)e.addend, E::R_TPOFF, sym});
         else if (ctx.arg.shared)
-          add({off, sym->get_addr(ctx) - ctx.tls_begin, E::R_TPOFF});
+          add({off, sym->get_addr(ctx) + e.addend - ctx.tls_begin, E::R_TPOFF});
         else
-          add({off, sym->get_addr(ctx) - ctx.tp_addr});
+          add({off, sym->get_addr(ctx) + e.addend - ctx.tp_addr});
         break;
       case ALPHA_GOT_TLSLD:
         if (ctx.arg.shared)
