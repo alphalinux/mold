@@ -104,6 +104,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
 
     switch (rel.r_type) {
     case R_ALPHA_GPREL32:
+      check(S + A - GP, -(1LL << 31), 1LL << 31);
       *(ul32 *)loc = S + A - GP;
       break;
     case R_ALPHA_LITERAL:
@@ -135,6 +136,9 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     }
     case R_ALPHA_GPDISP:
+      // An ldah/lda pair can materialize a displacement in
+      // [-0x80008000, 0x7fff8000).
+      check(GP - P, -(1LL << 31), (1LL << 31) - 0x8000);
       *(ul16 *)loc = hi(GP - P);
       *(ul16 *)(loc + A) = GP - P;
       break;
@@ -142,6 +146,9 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       *(ul32 *)loc = S + A - P;
       break;
     case R_ALPHA_GPRELHIGH:
+      // GPRELHIGH is paired with GPRELLOW to form an ldah/lda pair,
+      // which reaches [-0x80008000, 0x7fff8000).
+      check(S + A - GP, -(1LL << 31), (1LL << 31) - 0x8000);
       *(ul16 *)loc = hi(S + A - GP);
       break;
     case R_ALPHA_GPRELLOW:
@@ -237,6 +244,10 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
   // Alpha has no PLT, so there's no link-time address we can give to an
   // imported function. A PC-relative relocation can't be promoted to a
   // dynamic relocation either, so we have to report an error.
+  //
+  // The same is true of GP-relative relocations; they are resolved at
+  // link-time as a difference between two addresses in the output file,
+  // just as PC-relative ones are, so the same decision table applies.
   auto scan_alpha_pcrel = [&](Symbol<E> &sym, const ElfRel<E> &rel) {
     if (sym.is_imported && sym.get_type() == STT_FUNC)
       Error(ctx) << *this << ": " << rel << " against an imported function `"
@@ -290,13 +301,15 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
     case R_ALPHA_TPRELLO:
       check_tlsle(ctx, sym, rel);
       break;
-    case R_ALPHA_REFQUAD:
     case R_ALPHA_GPREL32:
+    case R_ALPHA_GPRELHIGH:
+    case R_ALPHA_GPRELLOW:
+      scan_alpha_pcrel(sym, rel);
+      break;
+    case R_ALPHA_REFQUAD:
     case R_ALPHA_LITUSE:
     case R_ALPHA_GPDISP:
     case R_ALPHA_HINT:
-    case R_ALPHA_GPRELHIGH:
-    case R_ALPHA_GPRELLOW:
     case R_ALPHA_DTPRELHI:
     case R_ALPHA_DTPRELLO:
       break;
