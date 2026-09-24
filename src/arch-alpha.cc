@@ -91,7 +91,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
 
   for (i64 i = 0; i < rels.size(); i++) {
     const ElfRel<E> &rel = rels[i];
-    if (rel.r_type == R_NONE)
+    if (rel.r_type == R_NONE || record_undef_error(ctx, rel))
       continue;
 
     Symbol<E> &sym = *file->symbols[rel.r_sym];
