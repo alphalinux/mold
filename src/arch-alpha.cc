@@ -22,9 +22,9 @@
 //
 //  - Alpha lacks PC-relative memory load/store instructions, so it uses
 //    register-relative load/store instructions in position-independent
-//    code. Specifically, GP (which is an alias for $r29) refers to
-//    .alpha_got+0x8000, and global variables' addresses are loaded in a
-//    GP-relative manner.
+//    code. Specifically, GP (which is an alias for $r29) points 32 KiB
+//    past the start of the GOT group of the current input file, and
+//    global variables' addresses are loaded in a GP-relative manner.
 //
 //  - It looks like even function addresses are first loaded to register
 //    in a GP-relative manner before calling it. We can relax it to
@@ -37,6 +37,8 @@
 #if MOLD_ALPHA
 
 #include "mold.h"
+
+#include <tbb/parallel_for_each.h>
 
 namespace mold {
 
@@ -100,7 +102,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
     u64 S = sym.get_addr(ctx);
     u64 A = rel.r_addend;
     u64 P = get_addr() + rel.r_offset;
-    u64 GP = ctx.extra.got->get_gp(ctx);
+    u64 GP = ctx.extra.got->get_gp(ctx, *file);
 
     switch (rel.r_type) {
     case R_ALPHA_GPREL32:
@@ -108,7 +110,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     case R_ALPHA_LITERAL:
       *(ul16 *)loc =
-        ctx.extra.got->get_addr({&sym, (i64)A, ALPHA_GOT_REGULAR}) - GP;
+        ctx.extra.got->get_addr(*file, {&sym, (i64)A, ALPHA_GOT_REGULAR}) - GP;
       break;
     case R_ALPHA_BRSGP:
       *(ul32 *)loc |= bits(S + A - P - 4, 22, 0);
@@ -128,11 +130,11 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     case R_ALPHA_TLSGD:
       *(ul16 *)loc =
-        ctx.extra.got->get_addr({&sym, (i64)A, ALPHA_GOT_TLSGD}) - GP;
+        ctx.extra.got->get_addr(*file, {&sym, (i64)A, ALPHA_GOT_TLSGD}) - GP;
       break;
     case R_ALPHA_TLSLDM:
       *(ul16 *)loc =
-        ctx.extra.got->get_addr({nullptr, 0, ALPHA_GOT_TLSLD}) - GP;
+        ctx.extra.got->get_addr(*file, {nullptr, 0, ALPHA_GOT_TLSLD}) - GP;
       break;
     case R_ALPHA_DTPRELHI:
       *(ul16 *)loc = hi(S + A - ctx.dtp_addr);
@@ -142,7 +144,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     case R_ALPHA_GOTTPREL:
       *(ul16 *)loc =
-        ctx.extra.got->get_addr({&sym, (i64)A, ALPHA_GOT_GOTTP}) - GP;
+        ctx.extra.got->get_addr(*file, {&sym, (i64)A, ALPHA_GOT_GOTTP}) - GP;
       break;
     case R_ALPHA_TPRELHI:
       *(ul16 *)loc = hi(S + A - ctx.tp_addr);
@@ -204,8 +206,11 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
   assert(shdr().sh_flags & SHF_ALLOC);
   std::span<const ElfRel<E>> rels = get_rels(ctx);
 
-  // Input sections of the same file are scanned serially, so collecting
-  // GOT entries per file doesn't need a lock.
+  // GOT entries are collected on a per-file basis because we need to
+  // know which file refers to which GOT entries to split the GOT into
+  // GP-addressable groups. This function is called only once for each
+  // input section, and input sections of the same file are scanned
+  // serially, so we don't need to take a lock here.
   auto add_got_entry = [&](AlphaGotEntry ent) {
     file->extra.got_entries.push_back(ent);
   };
@@ -271,16 +276,29 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
   }
 }
 
-// Alpha lacks PC-relative memory load/store instructions, so a GOT entry
-// is read with a single instruction that takes a 16-bit signed
-// displacement from GP. GP is .alpha_got+0x8000, so .alpha_got can be up
-// to 64 KiB.
+// Alpha lacks PC-relative memory load/store instructions, so all memory
+// accesses to global data are made relative to GP. A GOT entry is read
+// with a single instruction that takes a 16-bit signed displacement from
+// GP, which means that a single GP value can address only 64 KiB worth of
+// GOT entries. That's not enough for large programs.
 //
-// Unlike other targets, an R_ALPHA_LITERAL relocation may refer to a
-// symbol with a non-zero addend, so a GOT entry is keyed not only by a
-// symbol but also by an addend. The common GotSection can't represent
-// that, so we keep all GOT entries for Alpha, TLS entries included, in
-// this section instead.
+// To work around the limitation, we split the GOT into multiple chunks,
+// each of which is 64 KiB or smaller, and assign a different GP value to
+// each input file. We call each chunk a "GOT group". GNU ld does the same
+// thing and calls it "multi-GOT".
+//
+// Since each input file has its own GP value, a GOT entry that is referred
+// to by input files belonging to different groups is duplicated for each
+// group.
+//
+// Note that Alpha's GOT entries are not only for symbol addresses; TLS
+// entries are also read relative to GP, so they are managed by this class
+// as well. Also note that, unlike other targets, an R_ALPHA_LITERAL
+// relocation may refer to a symbol with a non-zero addend, so a GOT entry
+// is keyed not only by a symbol but also by an addend.
+//
+// We use our own GOT section instead of the common GotSection because the
+// common one cannot represent duplicated entries.
 bool operator<(const AlphaGotEntry &a, const AlphaGotEntry &b) {
   // We sort entries by a key that is unique to each entry so that the
   // output is deterministic. A symbol is identified by its file and its
@@ -300,45 +318,105 @@ bool operator<(const AlphaGotEntry &a, const AlphaGotEntry &b) {
   return get_key(a) < get_key(b);
 }
 
+static i64 get_size(std::span<const AlphaGotEntry> entries) {
+  i64 sz = 0;
+  for (const AlphaGotEntry &e : entries)
+    sz += e.size() * sizeof(Word<E>);
+  return sz;
+}
+
+// Group input files so that all GOT entries referred to by a single file
+// are addressable from that file's GP.
 void AlphaGotSection::finalize(Context<E> &ctx) {
-  for (ObjectFile<E> *file : ctx.objs)
-    append(entries, file->extra.got_entries);
+  tbb::parallel_for_each(ctx.objs, [](ObjectFile<E> *file) {
+    std::vector<Entry> &vec = file->extra.got_entries;
+    std::sort(vec.begin(), vec.end());
+    remove_duplicates(vec);
+  });
 
-  std::sort(entries.begin(), entries.end());
-  remove_duplicates(entries);
+  std::vector<Entry> cur;
 
-  i64 offset = 0;
-  offsets.resize(entries.size());
+  auto flush = [&] {
+    if (!cur.empty()) {
+      Group group;
+      group.entries = std::move(cur);
+      cur.clear();
+      groups.push_back(std::move(group));
+    }
+  };
 
-  for (i64 i = 0; i < entries.size(); i++) {
-    if (entries[i].kind == ALPHA_GOT_GOTTP)
-      has_gottp = true;
-    offsets[i] = offset;
-    offset += entries[i].size() * sizeof(Word<E>);
+  for (ObjectFile<E> *file : ctx.objs) {
+    std::vector<Entry> &vec = file->extra.got_entries;
+
+    // A file with no GOT entry of its own still needs a GP, because it
+    // may have GP-relative relocations or make a BRSGP call that has to
+    // agree with the callee's GP. Put it in the group we are currently
+    // filling rather than leaving it in group 0.
+    if (vec.empty()) {
+      file->extra.got_group = groups.size();
+      continue;
+    }
+
+    std::vector<Entry> merged;
+    std::set_union(cur.begin(), cur.end(), vec.begin(), vec.end(),
+                   std::back_inserter(merged));
+
+    if (get_size(merged) > GROUP_SIZE) {
+      flush();
+      merged = vec;
+
+      // A single file needing more than 64 KiB of GOT entries is
+      // unlinkable because we can't assign more than one GP to a file.
+      if (get_size(merged) > GROUP_SIZE)
+        Fatal(ctx) << *file << ": GOT entries referred to by this file exceed"
+                   << " 64 KiB; recompile it as multiple smaller files";
+    }
+
+    cur = std::move(merged);
+    file->extra.got_group = groups.size();
   }
+  flush();
 
-  if (offset > 65536)
-    Fatal(ctx) << "GOT is " << offset << " bytes, but GP can address only"
-               << " 64 KiB of GOT entries";
+  // Assign offsets to GOT entries.
+  i64 offset = 0;
+
+  for (Group &group : groups) {
+    for (const Entry &e : group.entries)
+      if (e.kind == ALPHA_GOT_GOTTP)
+        has_gottp = true;
+
+    group.offset = offset;
+    group.offsets.resize(group.entries.size());
+
+    for (i64 i = 0; i < group.entries.size(); i++) {
+      group.offsets[i] = offset;
+      offset += group.entries[i].size() * sizeof(Word<E>);
+    }
+    group.size = offset - group.offset;
+  }
 
   this->shdr.sh_size = offset;
 }
 
-u64 AlphaGotSection::get_gp(Context<E> &ctx) const {
+// A GP value is defined as the address of the beginning of a GOT group
+// plus 0x8000, so that a 16-bit signed displacement from GP can cover
+// the entire 64 KiB group.
+u64 AlphaGotSection::get_gp(Context<E> &ctx, ObjectFile<E> &file) const {
   // If this section is empty, it is removed from the output file and its
   // sh_addr is left at zero. GP still has to point somewhere inside the
   // loaded image, though, because GP-relative relocations that don't
   // involve the GOT at all are computed against it. Use the common .got,
   // which always contains at least the reserved first word.
-  if (entries.empty())
+  if (groups.empty())
     return ctx.got->shdr.sh_addr + 0x8000;
-  return this->shdr.sh_addr + 0x8000;
+  return this->shdr.sh_addr + groups[file.extra.got_group].offset + 0x8000;
 }
 
-u64 AlphaGotSection::get_addr(Entry ent) const {
-  auto it = std::lower_bound(entries.begin(), entries.end(), ent);
-  assert(it != entries.end() && *it == ent);
-  return this->shdr.sh_addr + offsets[it - entries.begin()];
+u64 AlphaGotSection::get_addr(ObjectFile<E> &file, Entry ent) const {
+  const Group &group = groups[file.extra.got_group];
+  auto it = std::lower_bound(group.entries.begin(), group.entries.end(), ent);
+  assert(it != group.entries.end() && *it == ent);
+  return this->shdr.sh_addr + group.offsets[it - group.entries.begin()];
 }
 
 namespace {
@@ -359,52 +437,54 @@ get_slots(Context<E> &ctx, const AlphaGotSection &sec) {
   auto add = [&](Slot slot) { vec.push_back(slot); };
   constexpr i64 wordsize = sizeof(Word<E>);
 
-  for (i64 i = 0; i < sec.entries.size(); i++) {
-    const AlphaGotEntry &e = sec.entries[i];
-    i64 off = sec.offsets[i];
-    Symbol<E> *sym = e.sym;
+  for (const AlphaGotSection::Group &group : sec.groups) {
+    for (i64 i = 0; i < group.entries.size(); i++) {
+      const AlphaGotEntry &e = group.entries[i];
+      i64 off = group.offsets[i];
+      Symbol<E> *sym = e.sym;
 
-    switch (e.kind) {
-    case ALPHA_GOT_REGULAR:
-      if (sym->is_imported) {
-        // R_ALPHA_GLOB_DAT ignores an addend, so we need to use
-        // R_ALPHA_REFQUAD if we have a non-zero addend.
-        if (e.addend)
-          add({off, (u64)e.addend, E::R_ABS, sym});
+      switch (e.kind) {
+      case ALPHA_GOT_REGULAR:
+        if (sym->is_imported) {
+          // R_ALPHA_GLOB_DAT ignores an addend, so we need to use
+          // R_ALPHA_REFQUAD if we have a non-zero addend.
+          if (e.addend)
+            add({off, (u64)e.addend, E::R_ABS, sym});
+          else
+            add({off, 0, E::R_GLOB_DAT, sym});
+        } else if (ctx.arg.pic && sym->is_relative()) {
+          add({off, sym->get_addr(ctx, NO_PLT) + e.addend, E::R_RELATIVE});
+        } else {
+          add({off, sym->get_addr(ctx, NO_PLT) + e.addend});
+        }
+        break;
+      case ALPHA_GOT_TLSGD:
+        if (sym->is_imported) {
+          add({off, 0, E::R_DTPMOD, sym});
+          add({off + wordsize, (u64)e.addend, E::R_DTPOFF, sym});
+        } else if (ctx.arg.shared) {
+          add({off, 0, E::R_DTPMOD});
+          add({off + wordsize, sym->get_addr(ctx) + e.addend - ctx.dtp_addr});
+        } else {
+          add({off, 1}); // 1 means the main executable
+          add({off + wordsize, sym->get_addr(ctx) + e.addend - ctx.dtp_addr});
+        }
+        break;
+      case ALPHA_GOT_GOTTP:
+        if (sym->is_imported)
+          add({off, (u64)e.addend, E::R_TPOFF, sym});
+        else if (ctx.arg.shared)
+          add({off, sym->get_addr(ctx) + e.addend - ctx.tls_begin, E::R_TPOFF});
         else
-          add({off, 0, E::R_GLOB_DAT, sym});
-      } else if (ctx.arg.pic && sym->is_relative()) {
-        add({off, sym->get_addr(ctx, NO_PLT) + e.addend, E::R_RELATIVE});
-      } else {
-        add({off, sym->get_addr(ctx, NO_PLT) + e.addend});
+          add({off, sym->get_addr(ctx) + e.addend - ctx.tp_addr});
+        break;
+      case ALPHA_GOT_TLSLD:
+        if (ctx.arg.shared)
+          add({off, 0, E::R_DTPMOD});
+        else
+          add({off, 1}); // 1 means the main executable
+        break;
       }
-      break;
-    case ALPHA_GOT_TLSGD:
-      if (sym->is_imported) {
-        add({off, 0, E::R_DTPMOD, sym});
-        add({off + wordsize, (u64)e.addend, E::R_DTPOFF, sym});
-      } else if (ctx.arg.shared) {
-        add({off, 0, E::R_DTPMOD});
-        add({off + wordsize, sym->get_addr(ctx) + e.addend - ctx.dtp_addr});
-      } else {
-        add({off, 1}); // 1 means the main executable
-        add({off + wordsize, sym->get_addr(ctx) + e.addend - ctx.dtp_addr});
-      }
-      break;
-    case ALPHA_GOT_GOTTP:
-      if (sym->is_imported)
-        add({off, (u64)e.addend, E::R_TPOFF, sym});
-      else if (ctx.arg.shared)
-        add({off, sym->get_addr(ctx) + e.addend - ctx.tls_begin, E::R_TPOFF});
-      else
-        add({off, sym->get_addr(ctx) + e.addend - ctx.tp_addr});
-      break;
-    case ALPHA_GOT_TLSLD:
-      if (ctx.arg.shared)
-        add({off, 0, E::R_DTPMOD});
-      else
-        add({off, 1}); // 1 means the main executable
-      break;
     }
   }
   return vec;
@@ -413,26 +493,28 @@ get_slots(Context<E> &ctx, const AlphaGotSection &sec) {
 i64 AlphaGotSection::get_num_dynrels(Context<E> &ctx) const {
   i64 n = 0;
 
-  for (const Entry &e : entries) {
-    switch (e.kind) {
-    case ALPHA_GOT_REGULAR:
-      if (e.sym->is_imported || (ctx.arg.pic && e.sym->is_relative()))
-        n++;
-      break;
-    case ALPHA_GOT_TLSGD:
-      if (e.sym->is_imported)
-        n += 2;
-      else if (ctx.arg.shared)
-        n++;
-      break;
-    case ALPHA_GOT_GOTTP:
-      if (e.sym->is_imported || ctx.arg.shared)
-        n++;
-      break;
-    case ALPHA_GOT_TLSLD:
-      if (ctx.arg.shared)
-        n++;
-      break;
+  for (const Group &group : groups) {
+    for (const Entry &e : group.entries) {
+      switch (e.kind) {
+      case ALPHA_GOT_REGULAR:
+        if (e.sym->is_imported || (ctx.arg.pic && e.sym->is_relative()))
+          n++;
+        break;
+      case ALPHA_GOT_TLSGD:
+        if (e.sym->is_imported)
+          n += 2;
+        else if (ctx.arg.shared)
+          n++;
+        break;
+      case ALPHA_GOT_GOTTP:
+        if (e.sym->is_imported || ctx.arg.shared)
+          n++;
+        break;
+      case ALPHA_GOT_TLSLD:
+        if (ctx.arg.shared)
+          n++;
+        break;
+      }
     }
   }
   return n;
