@@ -2038,6 +2038,35 @@ struct ObjectFileExtras<PPC32> {
   ArenaPtr<InputSection<PPC32>> got2;
 };
 
+enum AlphaGotKind : u8 {
+  ALPHA_GOT_REGULAR,
+  ALPHA_GOT_TLSGD,
+  ALPHA_GOT_GOTTP,
+  ALPHA_GOT_TLSLD,
+};
+
+struct AlphaGotEntry {
+  bool operator==(const AlphaGotEntry &) const = default;
+
+  // Number of words this entry occupies in the GOT.
+  i64 size() const {
+    return (kind == ALPHA_GOT_TLSGD || kind == ALPHA_GOT_TLSLD) ? 2 : 1;
+  }
+
+  Symbol<ALPHA> *sym;
+  i64 addend;
+  AlphaGotKind kind;
+};
+
+bool operator<(const AlphaGotEntry &a, const AlphaGotEntry &b);
+
+template <>
+struct ObjectFileExtras<ALPHA> {
+  // GOT entries referred to by this file. Filled by scan_relocations()
+  // and consumed by AlphaGotSection::finalize().
+  std::vector<AlphaGotEntry> got_entries;
+};
+
 template <typename E>
 ExactArray<ElfRel<E>> decode_crel(Context<E> &ctx, ObjectFile<E> &file,
                                   const ElfShdr<E> &shdr);
@@ -2596,22 +2625,21 @@ public:
     this->shdr.sh_addralign = 8;
   }
 
-  void add_symbol(Symbol<ALPHA> &sym, i64 addend);
-  void finalize();
-  u64 get_addr(Symbol<ALPHA> &sym, i64 addend);
+  using Entry = AlphaGotEntry;
+
+  void finalize(Context<ALPHA> &ctx);
+  u64 get_gp(Context<ALPHA> &ctx) const;
+  u64 get_addr(Entry ent) const;
   i64 get_num_dynrels(Context<ALPHA> &ctx) const override;
   void write_dynrels(Context<ALPHA> &ctx, ElfRel<ALPHA> *buf) const override;
   void copy_buf(Context<ALPHA> &ctx) override;
 
-  struct Entry {
-    bool operator==(const Entry &) const = default;
-    Symbol<ALPHA> *sym;
-    i64 addend;
-  };
-
-private:
   std::vector<Entry> entries;
-  std::mutex mu;
+  std::vector<i64> offsets; // byte offset of each entry from .alpha_got
+
+  // True if we have at least one GOT entry for the initial-exec TLS
+  // model. Used to set the DF_STATIC_TLS flag.
+  bool has_gottp = false;
 };
 
 //

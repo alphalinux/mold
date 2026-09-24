@@ -2066,7 +2066,7 @@ void scan_relocations(Context<E> &ctx) {
   }
 
   if constexpr (is_alpha<E>)
-    ctx.extra.got->finalize();
+    ctx.extra.got->finalize(ctx);
 
   if (ctx.has_textrel && ctx.arg.warn_textrel)
     Warn(ctx) << "creating a DT_TEXTREL in an output file";

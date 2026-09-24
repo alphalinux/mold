@@ -884,6 +884,9 @@ static std::vector<Word<E>> create_dynamic_section(Context<E> &ctx) {
 
   if (!ctx.got->gottp_syms.empty())
     flags |= DF_STATIC_TLS;
+  if constexpr (is_alpha<E>)
+    if (ctx.extra.got->has_gottp)
+      flags |= DF_STATIC_TLS;
   if (ctx.has_textrel)
     flags |= DF_TEXTREL;
 
