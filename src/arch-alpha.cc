@@ -110,6 +110,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
 
     switch (rel.r_type) {
     case R_ALPHA_GPREL32:
+      check(S + A - GP, -(1LL << 31), 1LL << 31);
       *(ul32 *)loc = S + A - GP;
       break;
     case R_ALPHA_LITERAL:
@@ -138,6 +139,9 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       break;
     }
     case R_ALPHA_GPDISP:
+      // An ldah/lda pair can materialize a displacement in
+      // [-0x80008000, 0x7fff8000).
+      check(GP - P, -(1LL << 31) - 0x8000, (1LL << 31) - 0x8000);
       *(ul16 *)loc = hi(GP - P);
       *(ul16 *)(loc + A) = GP - P;
       break;
@@ -145,6 +149,7 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       *(ul32 *)loc = S + A - P;
       break;
     case R_ALPHA_GPRELHIGH:
+      check(S + A - GP, -(1LL << 31) - 0x8000, (1LL << 31) - 0x8000);
       *(ul16 *)loc = hi(S + A - GP);
       break;
     case R_ALPHA_GPRELLOW:

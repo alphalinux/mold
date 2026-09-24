@@ -30,3 +30,23 @@ grep -q 'R_ALPHA_GPRELHIGH against an imported symbol' $t/log
 
 ! $CC -B. -no-pie -o $t/exe $t/a.o $t/c.o $t/d.so 2> $t/log
 grep -q 'R_ALPHA_GPRELHIGH against an imported symbol' $t/log
+
+# GPREL32 and a GPRELHIGH/GPRELLOW pair hold a 32-bit displacement.
+cat <<EOF | $CC -c -o $t/f.o -xassembler -
+	.text
+	.globl	get_far
+	.ent	get_far
+get_far:
+	ldgp	\$29, 0(\$27)
+	.prologue 1
+	ldah	\$1, far(\$29)	!gprelhigh
+	ldq	\$0, far(\$1)	!gprellow
+	ret
+	.end	get_far
+	.section .rodata
+	.gprel32 far
+EOF
+
+! $CC -B. -no-pie -o $t/exe $t/f.o $t/c.o -Wl,--defsym=far=0x100000000000 2> $t/log
+grep -q 'R_ALPHA_GPRELHIGH .* out of range' $t/log
+grep -q 'R_ALPHA_GPREL32 .* out of range' $t/log
