@@ -238,8 +238,9 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
   };
 
   // Alpha has neither a PLT nor copy relocations, so an imported symbol
-  // has no link-time address. A PC-relative relocation can't be promoted
-  // to a dynamic relocation either, so we have to report an error.
+  // has no link-time address. A PC-relative or GP-relative relocation
+  // can't be promoted to a dynamic relocation either, so we have to
+  // report an error.
   auto scan_alpha_pcrel = [&](Symbol<E> &sym, const ElfRel<E> &rel) {
     if (sym.is_imported)
       Error(ctx) << *this << ": " << rel << " against an imported symbol `"
@@ -295,13 +296,15 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
     case R_ALPHA_TPRELLO:
       check_tlsle(ctx, sym, rel);
       break;
-    case R_ALPHA_REFQUAD:
     case R_ALPHA_GPREL32:
+    case R_ALPHA_GPRELHIGH:
+    case R_ALPHA_GPRELLOW:
+      scan_alpha_pcrel(sym, rel);
+      break;
+    case R_ALPHA_REFQUAD:
     case R_ALPHA_LITUSE:
     case R_ALPHA_GPDISP:
     case R_ALPHA_HINT:
-    case R_ALPHA_GPRELHIGH:
-    case R_ALPHA_GPRELLOW:
     case R_ALPHA_DTPRELHI:
     case R_ALPHA_DTPRELLO:
       break;
