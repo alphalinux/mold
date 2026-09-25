@@ -138,6 +138,10 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       *(ul32 *)loc |= bits(val, 22, 2);
       break;
     }
+    case R_ALPHA_BRADDR:
+      check(S + A - P - 4, -(1 << 22), 1 << 22);
+      *(ul32 *)loc |= bits(S + A - P - 4, 22, 2);
+      break;
     case R_ALPHA_GPDISP:
       // An ldah/lda pair can materialize a displacement in
       // [-0x80008000, 0x7fff8000).
@@ -269,6 +273,7 @@ void InputSection<E>::scan_relocations(Context<E> &ctx) {
       add_got_entry({&sym, (i64)rel.r_addend, ALPHA_GOT_REGULAR});
       break;
     case R_ALPHA_SREL32:
+    case R_ALPHA_BRADDR:
       scan_alpha_pcrel(sym, rel);
       break;
     case R_ALPHA_BRSGP:
