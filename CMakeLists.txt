@@ -50,6 +50,13 @@ include(CMakeDependentOption)
 include(CheckSymbolExists)
 include(GNUInstallDirs)
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^alpha")
+  # GNU ld's Alpha relaxation can turn a GOT load into a GP-relative
+  # reference that ends up out of range once the final layout is known,
+  # failing the link with "relocation truncated to fit: GPREL16".
+  add_link_options(-Wl,--no-relax)
+endif()
+
 add_executable(mold)
 target_compile_features(mold PRIVATE cxx_std_20)
 
