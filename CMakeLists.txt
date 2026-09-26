@@ -50,7 +50,20 @@ include(CMakeDependentOption)
 include(CheckSymbolExists)
 include(GNUInstallDirs)
 
+# Alpha CPUs without the BWX extension have no byte or halfword stores,
+# so by default GCC emulates them with a non-atomic ldq_u/stq_u
+# read-modify-write of the containing quadword, which can clobber a
+# concurrent store to a neighboring byte. That breaks the C++ memory model
+# and in turn TBB. -msafe-bwa and -msafe-partial make GCC use LL/SC
+# sequences instead. We add them globally so that they apply to the
+# bundled third-party libraries as well.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^alpha")
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag("-msafe-bwa -msafe-partial" HAVE_MSAFE_BWA)
+  if(HAVE_MSAFE_BWA)
+    add_compile_options(-msafe-bwa -msafe-partial)
+  endif()
+
   # GNU ld's Alpha relaxation can turn a GOT load into a GP-relative
   # reference that ends up out of range once the final layout is known,
   # failing the link with "relocation truncated to fit: GPREL16".
