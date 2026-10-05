@@ -3,6 +3,10 @@
 # Make sure all commands print out messages in English
 export LC_ALL=C
 
+# QEMU's user-mode emulation writes a core file into the current directory
+# for each guest crash, ignoring /proc/sys/kernel/core_pattern.
+ulimit -c 0
+
 canonical_name() {
   case $1 in
   i?86) echo i686 ;;
