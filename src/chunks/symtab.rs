@@ -237,6 +237,7 @@ pub fn to_output_esym<E: Target>(ctx: &Context<E>, sym: &Symbol, st_name: u32) -
         Family::Arm64 => esym.set_arm64_variant_pcs(sym.esym(ctx).arm64_variant_pcs()),
         Family::RiscV => esym.set_riscv_variant_cc(sym.esym(ctx).riscv_variant_cc()),
         Family::Ppc64V2 => esym.set_ppc64_local_entry(sym.esym(ctx).ppc64_local_entry()),
+        Family::Alpha => esym.set_alpha_st_other(sym.esym(ctx).alpha_st_other()),
         _ => {}
     }
 

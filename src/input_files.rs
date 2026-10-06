@@ -11,11 +11,12 @@ use std::mem::MaybeUninit;
 use std::ops::{Index, IndexMut, Range};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{OnceLock, RwLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 
 use rayon::prelude::*;
 
 use crate::arch::{Family, Target};
+use crate::chunks::alpha_got::AlphaGotEntry;
 use crate::chunks::merged::{MergedSection, MergedSectionCache};
 use crate::cmdline::Args;
 use crate::context::Context;
@@ -794,6 +795,12 @@ pub struct ObjectFile<E: Target> {
     pub riscv_attributes: RiscvAttributes,
     /// `.got2` for PPC32.
     pub got2: Option<u32>,
+    /// GOT entries that this file refers to, for Alpha. They are collected
+    /// on a per-file basis because we need to know which file refers to
+    /// which GOT entries to split the GOT into GP-addressable groups.
+    pub alpha_got_entries: Mutex<Vec<AlphaGotEntry>>,
+    /// The index of the GOT group that defines this file's GP on Alpha.
+    pub alpha_got_group: u32,
 
     symtab_shndx: &'static [[u8; 4]],
     num_common_symbols: u32,
@@ -1087,6 +1094,8 @@ impl<E: Target> ObjectFile<E> {
             lto_comdat_discarded: Vec::new(),
             riscv_attributes: RiscvAttributes::default(),
             got2: None,
+            alpha_got_entries: Mutex::new(Vec::new()),
+            alpha_got_group: 0,
             symtab_shndx: &[],
             num_common_symbols: 0,
         }
@@ -2495,6 +2504,13 @@ impl<E: Target> ObjectFile<E> {
                     if sym.ty() != STT_FUNC {
                         fatal!(
                             "{self}: {sym}: .eh_frame CIE record with an external data reference is not supported"
+                        );
+                    }
+                    // Alpha has no PLT, so there's no link-time address we can
+                    // give to an imported function.
+                    if E::FAMILY == Family::Alpha {
+                        fatal!(
+                            "{self}: {sym}: .eh_frame CIE record with a reference to an imported function is not supported on this target"
                         );
                     }
                     sym.add_flags(NEEDS_PLT);

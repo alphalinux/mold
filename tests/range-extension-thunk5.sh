@@ -3,6 +3,9 @@
 
 [ $MACHINE = sh4 ] && skip
 
+# c.o refers to more GOT entries than a single GP can address on Alpha.
+[ $MACHINE = alpha ] && skip
+
 # Regression test for https://github.com/rui314/mold/issues/1538.
 #
 # On targets that use range extension thunks (ARM and PPC), mold's first

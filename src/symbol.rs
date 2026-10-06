@@ -18,7 +18,7 @@ use bstr::BStr;
 use hashbrown::{Equivalent, HashMap};
 use rayon::prelude::*;
 
-use crate::arch::Target;
+use crate::arch::{Family, Target};
 use crate::context::Context;
 use crate::elf::*;
 use crate::error::demangle_enabled;
@@ -1005,7 +1005,7 @@ impl Symbol {
 
     pub fn is_pde_ifunc<E: Target>(&self, ctx: &Context<E>) -> bool {
         // Returns true if this is an ifunc tha uses two GOT slots
-        self.is_ifunc() && !ctx.args.pic && !E::IS_PPC64
+        self.is_ifunc() && !ctx.args.pic && !E::IS_PPC64 && E::FAMILY != Family::Alpha
     }
 
     // Returns true if the symbol's PC-relative address is known at link-time.

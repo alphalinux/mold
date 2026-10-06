@@ -187,6 +187,10 @@ pub fn create_synthetic_sections<E: Target>(ctx: &mut Context<E>) {
         ctx.ppc64_opd = Some(crate::chunks::opd::Ppc64OpdSection::new());
         chunks.push(ChunkId::Ppc64Opd);
     }
+    if E::FAMILY == Family::Alpha {
+        ctx.alpha_got = Some(crate::chunks::alpha_got::AlphaGotSection::new());
+        chunks.push(ChunkId::AlphaGot);
+    }
 
     ctx.chunks.extend(chunks);
 }
@@ -2619,6 +2623,10 @@ pub fn scan_relocations<E: Target>(ctx: &mut Context<E>) {
         ctx.symbols[id].clear_flags();
     }
 
+    if E::FAMILY == Family::Alpha {
+        crate::chunks::alpha_got::finalize(ctx);
+    }
+
     if ctx.has_textrel.load(Ordering::Relaxed) && ctx.args.warn_textrel {
         warn!("creating a DT_TEXTREL in an output file");
     }
@@ -3245,6 +3253,7 @@ pub fn compute_address_significance<E: Target>(ctx: &mut Context<E>) {
 //   <writable relro data>
 //   .got
 //   .toc
+//   .alpha_got
 //   <writable relro bss>
 //   .relro_padding
 //   <writable non-relro data>
@@ -3326,6 +3335,7 @@ fn sort_output_sections_regular<E: Target>(ctx: &mut Context<E>) {
         match id {
             ChunkId::Got => 2,
             _ if hdr.name == b".toc" => 3,
+            ChunkId::AlphaGot => 4,
             ChunkId::RelroPadding => i64::MAX,
             _ => 0,
         }
@@ -3811,7 +3821,9 @@ fn num_irelative_relocs<E: Target>(ctx: &Context<E>) -> u64 {
         .flat_map(|osec| &osec.abs_rels)
         .filter(|r| r.kind == chunks::output_section::AbsRelKind::IFunc)
         .count();
-    (got + data) as u64
+
+    // Alpha keeps its GOT entries in a section of its own.
+    (got + data) as u64 + chunks::alpha_got::num_irelative_relocs(ctx)
 }
 
 fn to_paddr<E: Target>(ctx: &Context<E>, vaddr: u64) -> u64 {

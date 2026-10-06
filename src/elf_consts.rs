@@ -155,6 +155,7 @@ pub const EM_X86_64: u32 = 62;
 pub const EM_AARCH64: u32 = 183;
 pub const EM_RISCV: u32 = 243;
 pub const EM_LOONGARCH: u32 = 258;
+pub const EM_ALPHA: u32 = 0x9026;
 
 pub const EI_CLASS: u32 = 4;
 pub const EI_DATA: u32 = 5;
@@ -293,6 +294,8 @@ pub const EF_SPARC_HAL_R1: u32 = 0x000400;
 pub const EF_SPARC_SUN_US3: u32 = 0x000800;
 
 pub const STO_RISCV_VARIANT_CC: u32 = 0x80;
+pub const STO_ALPHA_NOPV: u32 = 0x80;
+pub const STO_ALPHA_STD_GPLOAD: u32 = 0x88;
 
 pub const ELF_TAG_FILE: u32 = 1;
 pub const ELF_TAG_SECTION: u32 = 2;
@@ -1396,4 +1399,42 @@ define_relocations! {
     R_LARCH_TLS_LD_PCREL20_S2 = 124;
     R_LARCH_TLS_GD_PCREL20_S2 = 125;
     R_LARCH_TLS_DESC_PCREL20_S2 = 126;
+}
+
+define_relocations! {
+    alpha_rel_to_string;
+    R_ALPHA_NONE = 0;
+    R_ALPHA_REFLONG = 1;
+    R_ALPHA_REFQUAD = 2;
+    R_ALPHA_GPREL32 = 3;
+    R_ALPHA_LITERAL = 4;
+    R_ALPHA_LITUSE = 5;
+    R_ALPHA_GPDISP = 6;
+    R_ALPHA_BRADDR = 7;
+    R_ALPHA_HINT = 8;
+    R_ALPHA_SREL16 = 9;
+    R_ALPHA_SREL32 = 10;
+    R_ALPHA_SREL64 = 11;
+    R_ALPHA_GPRELHIGH = 17;
+    R_ALPHA_GPRELLOW = 18;
+    R_ALPHA_GPREL16 = 19;
+    R_ALPHA_COPY = 24;
+    R_ALPHA_GLOB_DAT = 25;
+    R_ALPHA_JMP_SLOT = 26;
+    R_ALPHA_RELATIVE = 27;
+    R_ALPHA_BRSGP = 28;
+    R_ALPHA_TLSGD = 29;
+    R_ALPHA_TLSLDM = 30;
+    R_ALPHA_DTPMOD64 = 31;
+    R_ALPHA_GOTDTPREL = 32;
+    R_ALPHA_DTPREL64 = 33;
+    R_ALPHA_DTPRELHI = 34;
+    R_ALPHA_DTPRELLO = 35;
+    R_ALPHA_DTPREL16 = 36;
+    R_ALPHA_GOTTPREL = 37;
+    R_ALPHA_TPREL64 = 38;
+    R_ALPHA_TPRELHI = 39;
+    R_ALPHA_TPRELLO = 40;
+    R_ALPHA_TPREL16 = 41;
+    R_ALPHA_IRELATIVE = 42;
 }

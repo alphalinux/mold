@@ -38,6 +38,7 @@ mold-arch-sh4 = { path = "../arch/sh4", optional = true }
 mold-arch-sh4be = { path = "../arch/sh4be", optional = true }
 mold-arch-loongarch64 = { path = "../arch/loongarch64", optional = true }
 mold-arch-loongarch32 = { path = "../arch/loongarch32", optional = true }
+mold-arch-alpha = { path = "../arch/alpha", optional = true }
 
 [dev-dependencies]
 mold-tests = { path = "../tests" }
@@ -48,6 +49,7 @@ mold-tests = { path = "../tests" }
 default = [
     "x86_64", "i386", "arm32", "arm32be", "arm64", "arm64be", "riscv64", "riscv64be", "riscv32", "riscv32be",
     "ppc64v2", "ppc32", "ppc64v1", "s390x", "sparc64", "m68k", "sh4", "sh4be", "loongarch64", "loongarch32",
+    "alpha",
 ]
 system-allocator = []
 x86_64 = ["dep:mold-arch-x86_64"]
@@ -70,3 +72,4 @@ sh4 = ["dep:mold-arch-sh4"]
 sh4be = ["dep:mold-arch-sh4be"]
 loongarch64 = ["dep:mold-arch-loongarch64"]
 loongarch32 = ["dep:mold-arch-loongarch32"]
+alpha = ["dep:mold-arch-alpha"]

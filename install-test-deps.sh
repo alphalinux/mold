@@ -22,6 +22,7 @@ ubuntu | pop | linuxmint | debian | raspbian | neon | zorin)
     gcc-sparc64-linux-gnu g++-sparc64-linux-gnu \
     gcc-m68k-linux-gnu g++-m68k-linux-gnu \
     gcc-sh4-linux-gnu g++-sh4-linux-gnu \
+    gcc-alpha-linux-gnu g++-alpha-linux-gnu \
     gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
   ;;
 fedora | fedora-* | amzn | rhel | centos)

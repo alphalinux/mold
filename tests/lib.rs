@@ -46,6 +46,7 @@ const TARGETS: &[TargetSpec] = &[
     TargetSpec { machine: "sh4", triple: "sh4-linux-gnu", qemu: "qemu-sh4" },
     TargetSpec { machine: "sh4aeb", triple: "sh4aeb-linux-gnu", qemu: "qemu-sh4eb" },
     TargetSpec { machine: "m68k", triple: "m68k-linux-gnu", qemu: "qemu-m68k" },
+    TargetSpec { machine: "alpha", triple: "alpha-linux-gnu", qemu: "qemu-alpha" },
     TargetSpec {
         machine: "loongarch64",
         triple: "loongarch64-linux-gnu",

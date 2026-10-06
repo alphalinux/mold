@@ -99,7 +99,14 @@ is_musl() {
 supports_ifunc() {
   ! is_musl &&
     echo 'void x() __attribute__((ifunc("y"))); void *y() { return 0; }' |
-    $CC -c -o /dev/null -xc - >& /dev/null
+    $CC -c -o /dev/null -xc - >& /dev/null || return 1
+
+  # GCC supports ifunc on Alpha, but no glibc release does yet.
+  [ $MACHINE = alpha ] || return 0
+  echo 'void x() __attribute__((ifunc("y"))); void z() {}
+        void *y() { return z; } int main() { x(); }' |
+    $CC -o $t/supports_ifunc -xc - >& /dev/null &&
+    $QEMU $t/supports_ifunc >& /dev/null
 }
 
 supports_tlsdesc() {

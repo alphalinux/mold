@@ -90,6 +90,7 @@ macro_rules! chunk_header {
                 .$borrow()
                 .expect("chunk does not exist"),
             ChunkId::Ppc64Opd => &$($mutable)? $ctx.ppc64_opd.$borrow().expect("chunk does not exist").hdr,
+            ChunkId::AlphaGot => &$($mutable)? $ctx.alpha_got.$borrow().expect("chunk does not exist").hdr,
             ChunkId::GdbIndex => $ctx.gdb_index.$borrow().expect("chunk does not exist"),
             ChunkId::RelroPadding => $ctx.relro_padding.$borrow().expect("chunk does not exist"),
             ChunkId::Output(id) => &$($mutable)? $ctx.output_sections[id.index()].hdr,
@@ -241,6 +242,7 @@ pub struct Context<E: Target> {
     pub arm_exidx: Option<crate::chunks::arm_exidx::ArmExidxSection<E>>,
     pub ppc64_save_restore: Option<ChunkHeader<E>>,
     pub ppc64_opd: Option<crate::chunks::opd::Ppc64OpdSection<E>>,
+    pub alpha_got: Option<crate::chunks::alpha_got::AlphaGotSection<E>>,
     /// Whether any input uses Power10 PC-relative calls, which decides
     /// how thunks address their targets.
     pub is_power10: AtomicBool,
@@ -339,6 +341,7 @@ impl<E: Target> Context<E> {
             arm_exidx: None,
             ppc64_save_restore: None,
             ppc64_opd: None,
+            alpha_got: None,
             is_power10: AtomicBool::new(false),
             gdb_index: None,
             gdb_index_data: None,

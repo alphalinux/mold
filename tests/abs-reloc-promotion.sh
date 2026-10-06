@@ -5,6 +5,9 @@
 # there is no read-only reference to promote.
 [[ $MACHINE = ppc* ]] && skip
 
+# Alpha has neither canonical PLTs nor copy relocations.
+[ $MACHINE = alpha ] && skip
+
 # A read-only absolute reference to an imported symbol promotes the
 # symbol to a copy relocation or a canonical PLT entry, which fixes its
 # address at link time. Writable references to the same symbol must then

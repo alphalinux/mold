@@ -145,7 +145,17 @@ pub fn copy_buf<E: Target>(ctx: &Context<E>, i: u32, buf: &mut [u8], osec_buf: O
             // than in r_addend, and the relocation records we emit here are
             // meant to be consumed as if they were in an object file, so we
             // follow that convention.
-            let out_addend = if E::FAMILY == Family::Sh4 { 0 } else { addend };
+            //
+            // On Alpha, the r_addend field of R_ALPHA_GPDISP and R_ALPHA_LITUSE
+            // does not contain an addend but auxiliary information for the
+            // relocation, so it must be copied verbatim.
+            let out_addend = match E::FAMILY {
+                Family::Sh4 => 0,
+                Family::Alpha if matches!(rel.r_type(), R_ALPHA_GPDISP | R_ALPHA_LITUSE) => {
+                    rel.r_addend()
+                }
+                _ => addend,
+            };
 
             // R_SPARC_OLO10 stores a second addend in the type field, so we
             // start from a copy of the input record rather than a new one.

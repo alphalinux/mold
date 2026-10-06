@@ -31,7 +31,7 @@ pub fn elf_hash(name: &[u8]) -> u32 {
 pub fn new_header<E: Target>() -> ChunkHeader<E> {
     let mut hdr = ChunkHeader::<E>::new(".hash", SHT_HASH, SHF_ALLOC as u64);
     // Even though u32 should suffice as an etnry size for all targets,
-    // s390x uses u64. It looks like a spec bug, but we need to follow
+    // s390x and Alpha use u64. It looks like a spec bug, but we need to follow
     // suit for the sake of binary compatibility.
     let entry = entry_size::<E>() as u64;
     hdr.shdr.sh_entsize.set(entry);
@@ -40,7 +40,7 @@ pub fn new_header<E: Target>() -> ChunkHeader<E> {
 }
 
 pub fn entry_size<E: Target>() -> usize {
-    if E::FAMILY == Family::S390x { 8 } else { 4 }
+    if matches!(E::FAMILY, Family::S390x | Family::Alpha) { 8 } else { 4 }
 }
 
 pub fn update_shdr<E: Target>(ctx: &mut Context<E>) {

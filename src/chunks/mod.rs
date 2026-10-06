@@ -6,6 +6,7 @@
 //! its section header and bookkeeping, and is addressed by a [`ChunkId`].
 //! Operations common to all chunks dispatch on the id.
 
+pub mod alpha_got;
 pub mod arm_exidx;
 pub mod build_id;
 pub mod comdat_group;
@@ -117,6 +118,7 @@ pub enum ChunkId {
     ArmExidx,
     Ppc64SaveRestore,
     Ppc64Opd,
+    AlphaGot,
     GdbIndex,
     RelroPadding,
     Output(OutputSectionId),
@@ -690,6 +692,7 @@ pub fn num_dynrels<E: Target>(ctx: &Context<E>, id: ChunkId) -> u64 {
         ChunkId::Copyrel => ctx.copyrel.symbols.len() as u64,
         ChunkId::CopyrelRelro => ctx.copyrel_relro.symbols.len() as u64,
         ChunkId::Ppc64Opd => opd::num_dynrels(ctx),
+        ChunkId::AlphaGot => alpha_got::num_dynrels(ctx),
         _ => 0,
     }
 }
@@ -713,6 +716,7 @@ pub fn write_dynrels<E: Target>(ctx: &Context<E>, id: ChunkId, out: &mut [ElfRel
         ChunkId::Copyrel => copyrel::write_dynrels(ctx, &ctx.copyrel, out),
         ChunkId::CopyrelRelro => copyrel::write_dynrels(ctx, &ctx.copyrel_relro, out),
         ChunkId::Ppc64Opd => opd::write_dynrels(ctx, out),
+        ChunkId::AlphaGot => alpha_got::write_dynrels(ctx, out),
         _ => {}
     }
 }
@@ -784,6 +788,7 @@ pub fn copy_buf<E: Target>(ctx: &Context<E>, id: ChunkId, buf: &mut [u8]) {
         ChunkId::ArmExidx => arm_exidx::copy_buf(ctx, buf),
         ChunkId::Ppc64SaveRestore => ppc64_save_restore::copy_buf(ctx, buf),
         ChunkId::Ppc64Opd => opd::copy_buf(ctx, buf),
+        ChunkId::AlphaGot => alpha_got::copy_buf(ctx, buf),
         ChunkId::GdbIndex | ChunkId::RelroPadding | ChunkId::Placeholder(_) => {}
         ChunkId::Output(id) => output_section::copy_buf(ctx, id, buf),
         ChunkId::Merged(id) => merged::write_to(ctx, id, buf),

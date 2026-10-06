@@ -254,6 +254,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mold-arch-alpha"
+version = "3.0.0"
+dependencies = [
+ "mold",
+]
+
+[[package]]
 name = "mold-arch-arm32"
 version = "3.0.0"
 dependencies = [
@@ -399,6 +406,7 @@ version = "3.0.0"
 dependencies = [
  "mimalloc",
  "mold",
+ "mold-arch-alpha",
  "mold-arch-arm32",
  "mold-arch-arm32be",
  "mold-arch-arm64",

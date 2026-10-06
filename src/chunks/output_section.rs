@@ -465,6 +465,12 @@ pub fn promote_abs_relocations<E: Target>(
     if ctx.args.pic || osec.hdr.shdr.sh_flags.get() & SHF_WRITE as u64 != 0 {
         return;
     }
+    // Alpha has no PLT, and glibc doesn't support R_ALPHA_COPY, so we leave
+    // the relocation as a dynamic relocation, which makes the output file
+    // have a text relocation.
+    if E::FAMILY == Family::Alpha {
+        return;
+    }
     abs_rels.par_chunks(DYNREL_SHARD_SIZE).for_each(|shard| {
         for r in shard {
             let sym = &ctx.symbols[r.sym];
@@ -507,6 +513,20 @@ pub fn scan_abs_relocations<E: Target>(
                 let id = osec.members[r.member as usize];
                 let isec = ctx.input_section(id);
                 if r.kind != AbsRelKind::None && isec.sh_flags & SHF_WRITE as u64 == 0 {
+                    // A statically-linked executable applies its IRELATIVE
+                    // relocations before anything could make a read-only
+                    // section writable.
+                    if E::FAMILY == Family::Alpha
+                        && ctx.args.is_static
+                        && r.kind == AbsRelKind::IFunc
+                    {
+                        error!(
+                            "{}: ifunc symbol `{}' in read-only section is not supported",
+                            ctx.input_section_display(id),
+                            sym
+                        );
+                        continue;
+                    }
                     if ctx.args.z_text {
                         error!("{}: relocation at offset 0x{:x} against symbol `{}' can not be used; recompile with -fPIC",
                             ctx.input_section_display(id),

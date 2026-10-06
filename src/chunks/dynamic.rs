@@ -214,7 +214,7 @@ fn for_each_entry<E: Target>(ctx: &Context<E>, mut define: impl FnMut(u32, u64))
     if ctx.args.z_interpose {
         flags1 |= DF_1_INTERPOSE as u64;
     }
-    if !ctx.got.gottp_syms.is_empty() {
+    if !ctx.got.gottp_syms.is_empty() || ctx.alpha_got.as_ref().is_some_and(|got| got.has_gottp) {
         flags |= DF_STATIC_TLS as u64;
     }
     if has_textrel {

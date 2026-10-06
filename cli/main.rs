@@ -54,6 +54,8 @@ const TARGETS: &[(&str, LinkFn)] = &[
     ("loongarch64", mold_arch_loongarch64::link),
     #[cfg(feature = "loongarch32")]
     ("loongarch32", mold_arch_loongarch32::link),
+    #[cfg(feature = "alpha")]
+    ("alpha", mold_arch_alpha::link),
 ];
 
 fn link_for_target(target: &str, cmdline: mold::driver::Cmdline) -> mold::driver::LinkResult {

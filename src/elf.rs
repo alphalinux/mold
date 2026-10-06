@@ -373,6 +373,8 @@ pub trait SymbolRecord: FileRecord + fmt::Debug {
     fn set_riscv_variant_cc(&mut self, value: bool);
     fn ppc64_local_entry(&self) -> u8;
     fn set_ppc64_local_entry(&mut self, value: u8);
+    fn alpha_st_other(&self) -> u8;
+    fn set_alpha_st_other(&mut self, value: u8);
 
     #[inline]
     fn is_undef(&self) -> bool {
@@ -430,6 +432,7 @@ macro_rules! impl_symbol_record {
             fn arm64_variant_pcs(&self) -> bool { self.st_other & 0x80 != 0 }
             fn riscv_variant_cc(&self) -> bool { self.st_other & 0x80 != 0 }
             fn ppc64_local_entry(&self) -> u8 { self.st_other >> 5 }
+            fn alpha_st_other(&self) -> u8 { self.st_other & !3 }
 
             fn set_type(&mut self, ty: u32) {
                 self.st_info = (self.st_info & 0xf0) | (ty as u8 & 0xf);
@@ -453,6 +456,10 @@ macro_rules! impl_symbol_record {
 
             fn set_ppc64_local_entry(&mut self, v: u8) {
                 self.st_other = (self.st_other & 0x1f) | ((v & 7) << 5);
+            }
+
+            fn set_alpha_st_other(&mut self, v: u8) {
+                self.st_other = (self.st_other & 3) | (v & !3);
             }
         }
     };

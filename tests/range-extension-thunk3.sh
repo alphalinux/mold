@@ -3,6 +3,9 @@
 
 [ $MACHINE = sh4 ] && skip
 
+# d.o refers to more GOT entries than a single GP can address on Alpha.
+[ $MACHINE = alpha ] && skip
+
 seq 1    1000  | sed 's/.*/void func&() {}/' > $t/a0.c
 seq 1001 2000  | sed 's/.*/void func&() {}/' > $t/a1.c
 seq 2001 3000  | sed 's/.*/void func&() {}/' > $t/a2.c

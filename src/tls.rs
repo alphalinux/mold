@@ -168,10 +168,10 @@ pub fn tp_addr<E: Target>(phdr: &ElfPhdr<E>) -> u64 {
         Family::X86_64 | Family::I386 | Family::Sparc64 | Family::S390x => {
             align_to(phdr.p_vaddr() + phdr.p_memsz(), phdr.p_align())
         }
-        // On ARM and SH4, the runtime appends two words at the beginning
+        // On ARM, SH4 and Alpha, the runtime appends two words at the beginning
         // of TLV template image when copying TLVs to the TLS block, so we need
         // to offset it.
-        Family::Arm64 | Family::Arm32 | Family::Sh4 => {
+        Family::Arm64 | Family::Arm32 | Family::Sh4 | Family::Alpha => {
             align_down(phdr.p_vaddr().wrapping_sub(E::WORD_SIZE as u64 * 2), phdr.p_align())
         }
         // On PowerPC and m68k, TP is 0x7000 (28 KiB) past the beginning
