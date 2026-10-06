@@ -14,3 +14,10 @@ rustflags = ["-Ccode-model=medium"]
 # instantiating the linker has its own copies of.
 [target.'cfg(all())']
 rustflags = ["-Cllvm-args=-addrsig"]
+
+# rustc's Alpha targets default to a CPU without the byte/word extension
+# (BWX). Without it, storing a byte is a read-modify-write of the
+# containing quadword, which races with stores to the neighboring bytes
+# by other threads.
+[target.'cfg(target_arch = "alpha")']
+rustflags = ["-Ctarget-cpu=ev56"]
